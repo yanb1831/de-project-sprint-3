@@ -32,7 +32,6 @@ select distinct
 	   item_id,
 	   new_customers_revenue,
 	   returning_customers_revenue,
-	   date_actual,
 	   sum(case when status = 'refunded' then 1 else 0 end) over() as customers_refunded
 from mart.f_sales
 left join mart.d_calendar using(date_id)
