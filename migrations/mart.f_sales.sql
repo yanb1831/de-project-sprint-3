@@ -1,6 +1,4 @@
--- status
 alter table mart.f_sales add column if not exists status varchar(30) null;
-
 insert into mart.f_sales 
 (date_id, item_id, customer_id, city_id, quantity, payment_amount, status)
 select dc.date_id, item_id, customer_id, city_id, quantity, payment_amount, status 

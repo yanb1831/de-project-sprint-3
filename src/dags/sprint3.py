@@ -1,8 +1,7 @@
+from datetime import datetime, timedelta
 import requests
-import time
 import json
 from airflow import DAG
-from datetime import datetime, timedelta
 from airflow.providers.http.operators.http import SimpleHttpOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
@@ -27,8 +26,10 @@ headers = {
 business_dt = '{{ ds }}'
 
 def get_report(**context):
+    import time
+
     report_id = None
-    for i in range(20):
+    for i in range(60):
         response = requests.get(
             f"{http_conn_id.host}/get_report?task_id={context['ti'].xcom_pull(key='generate_report')}", headers=headers
         )
@@ -37,13 +38,14 @@ def get_report(**context):
             report_id = json.loads(response.content)['data']['report_id']
             break
         else:
-            time.sleep(10)
+            time.sleep(15)
     if not report_id:
         raise TimeoutError()
     context['ti'].xcom_push(key='get_report',value=report_id)
 
 def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
     import pandas as pd
+
     increment_id = ti.xcom_pull(key='get_increment')
     s3_filename = f'https://storage.yandexcloud.net/s3-sprint3/cohort_{cohort}/{nickname}/project/{increment_id}/{filename}'
     local_filename = date.replace('-', '') + '_' + filename
@@ -78,7 +80,7 @@ with DAG(
     dag_id='sales_mart',
     default_args={
         'owner': 'student',
-        'retries': 2
+        'retries': 3
     },
     description='Provide default dag for sprint3',
     catchup=True,
@@ -117,8 +119,7 @@ with DAG(
     update_user_order_log = PostgresOperator(
         task_id='update_user_order_log',
         postgres_conn_id=postgres_conn_id,
-        sql="sql/mart.update_user_order_log.sql",
-        parameters={"date": {business_dt}}
+        sql="sql/staging.user_order_log_update.sql"
     )
 
     upload_user_order_inc = PythonOperator(
@@ -128,6 +129,12 @@ with DAG(
                    'filename': 'user_order_log_inc.csv',
                    'pg_table': 'user_order_log',
                    'pg_schema': 'staging'}
+    )
+
+    update_user_order_log_2 = PostgresOperator(
+        task_id='update_user_order_log_2',
+        postgres_conn_id=postgres_conn_id,
+        sql="sql/staging.user_order_log_update_2.sql"
     )
 
     dimension_tasks = list()
@@ -167,6 +174,7 @@ with DAG(
         >> get_increment
         >> update_user_order_log
         >> upload_user_order_inc
+        >> update_user_order_log_2
         >> dimension_tasks
         >> update_f_sales
         >> create_f_customer_retention

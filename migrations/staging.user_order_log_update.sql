@@ -1,0 +1,1 @@
+alter table staging.user_order_log add column if not exists status varchar(30) null;
